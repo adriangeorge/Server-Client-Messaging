@@ -92,15 +92,22 @@ std::string processSTR(message *pack)
 
 int Server::broadcastMsg(message msg)
 {
+    if(msg.type == INVALID)
+        return 0;
+
     std::pair<message, int> msg_entry;
     std::string topicStr(msg.topic);
     msg_entry = std::make_pair(msg,0);
     // std::cout << "TOPIC " << topicStr << " HAS " << topicLibrary[topicStr].subscribers.size() << " SUBS\n";
     
+    // Go through each client in this topic's subscriber list
+    // If any of them are online send the message directly
+    // Else check if they have enabled SF so the message can be added
+    // To their backlog
     for (auto client : topicLibrary[topicStr].subscribers)
     {
-        int store;
-        store = (*client).isSF[topicStr];
+        // int store;
+        // store = (*client).isSF[topicStr];
         // If the client is online, simply send the message
         if (client->online)
         {
@@ -109,15 +116,16 @@ int Server::broadcastMsg(message msg)
                        sizeof(msg),
                        0);
             DIE(err < 0, "BROADCAST ERROR");
-        } else if (store) {
-            // If the client is offline but still has SF enabled
-            // Add message to client's backlog and increase remaining by one
-            msg_entry.second++;
-            if(msg_entry.second == 0)
-                topicLibrary[topicStr].messages.push_back(msg_entry);
-            
-            client->backlog.push_back(&topicLibrary[topicStr].messages.back());
-        }
+        } 
+        // else if (store) {
+        //     // If the client is offline but still has SF enabled
+        //     // Add message to client's backlog and increase remaining by one
+        //     if(msg_entry.second == 0)
+        //         topicLibrary[topicStr].messages.push_back(msg_entry);
+
+        //     topicLibrary[topicStr].messages.back().second++;
+        //     client->backlog.push_back(&topicLibrary[topicStr].messages.back());
+        // }
     }
     return 0;
 }
@@ -156,6 +164,8 @@ int main(int argc, char **argv)
     int num_resp;
     do
     {
+        feedMessage = "";
+        package.type = INVALID;
         // std::cout << "\n\nSERVER READY\n"; 
         num_resp = poll(server.getSockList(),
                         server.sockCount(),
@@ -210,7 +220,8 @@ int main(int argc, char **argv)
         // Offline
         // std::cout << "BROADCASTING" << feedMessage << std::endl;
         // feedMessage = "";
-        server.broadcastMsg(package);
+        if(feedMessage != "")
+            server.broadcastMsg(package);
 
     } while (true);
     return 0;

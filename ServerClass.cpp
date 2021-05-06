@@ -61,14 +61,21 @@ Server::~Server()
 
 message Server::handlePolls(int num_resp)
 {
+    // printf("K:%d U:%d T:%d\n", fds[LISTEN_KEY].revents,
+    //            fds[LISTEN_UDP].revents,
+    //            fds[LISTEN_TCP].revents);
+    // for (int i = 3; i < sockCount(); i++)
+    // {
+    //     printf("SOCK %d:%d:%p\n", i, fds[i].revents, &fds[i]);
+    // }
     message package;
-
+    memset(&package, 0, sizeof(package));
     // printf("CHECKING FOR KEYBOARD INPUT\n");
     // If exit command was received from keyboard
     // Close all sockets and exit
     if (fds[LISTEN_KEY].revents == POLLIN)
     {
-        // se citeste de la tastatura
+        // Read keyboard input
 		memset(buf, 0, BUFLEN);
 		fgets(buf, BUFLEN - 1, stdin);
 
@@ -78,22 +85,17 @@ message Server::handlePolls(int num_resp)
             return package;
 		}
         fds[LISTEN_KEY].revents = 0;
-        
     }
     // printf("ADDING ANY NEW CLIENTS THAT REQ TO CONN\n");
     // Check if any clients requested to connect
     if (fds[LISTEN_TCP].revents == POLLIN)
-    {
-        num_resp--;
         createClient();
-        fds.back().revents = 0;
-    }
+
     fds[LISTEN_TCP].revents = 0;
 
     // printf("PROCESSING ANY COMMANDS FROM EXISTING CLIENTS\n");
     // Process any requests from existing clients
     for(auto client : registered_clients) {
-        // printf("PROCESSING CLIENT %s\n", client.second->id);
         getClientCommand(client.second);
         client.second->descriptor->revents = 0;
     }
@@ -138,12 +140,15 @@ message Server::handlePolls(int num_resp)
             fds[LISTEN_UDP].revents = 0;
             return package;
         }
-        fds[LISTEN_UDP].revents = 0;
+        
     }
+    fds[LISTEN_UDP].revents = 0;
     return package;
 }
 
 void Server::createClient() {
+
+    
     // CREATING A NEW CLIENT OR SIGN IN IF EXISTING
     struct sockaddr_in new_client;
     socklen_t client_len = sizeof(new_client);
@@ -163,11 +168,6 @@ void Server::createClient() {
                     sizeof(int));
     DIE(err < 0, "SETSOCKOPT ERROR");
 
-    pollfd new_client_poll;
-    new_client_poll.fd = new_client_sock;
-    new_client_poll.events = POLLIN;
-    fds.push_back(new_client_poll);
-
     // The client must transmit it's ID immediately
     char client_id[10];
     memset(buf, 0, BUFLEN);
@@ -175,46 +175,75 @@ void Server::createClient() {
     DIE(err < 0, "RECV CLIENT ID ERROR");
     strcpy(client_id, buf);
     // Notify that a new client has joined
-    printf("New client %s connected from %s:%u.\n",
-                    client_id,
-                    inet_ntoa(new_client.sin_addr),
-                    new_client.sin_port);
-
+    if(registered_clients.count(client_id) == 0) {
+        printf("New client %s connected from %s:%u.\n",
+                        client_id,
+                        inet_ntoa(new_client.sin_addr),
+                        new_client.sin_port);
+        send(new_client_sock, "OK", 2, 0);
+    }
+    else if (!registered_clients[client_id]->online) {
+        printf("New client %s connected from %s:%u.\n",
+                            client_id,
+                            inet_ntoa(new_client.sin_addr),
+                            new_client.sin_port);
+        send(new_client_sock, "OK", 2, 0);
+    }
+    else {
+        printf("Client %s already connected.\n", client_id);
+        send(new_client_sock, "N", 1, 0);
+        return;
+    }
+    
     if(strlen(client_id) <= 0)
         return;
     
+    pollfd new_client_poll;
+    new_client_poll.fd = new_client_sock;
+    new_client_poll.events = POLLIN;
+    new_client_poll.revents = 0;
+    fds.push_back(new_client_poll);
+    
     // Make sure the client ID isn't already registered
-    if(!registered_clients.count(client_id)) {
+    if(registered_clients.count(client_id) == 0) {
         // Create a new client object
         Client * new_client_obj = new Client();
         strcpy(new_client_obj->id, client_id);
         // Store client object in map
         registered_clients[client_id] = new_client_obj;
     }
+
     // Set client to appear as online
     registered_clients[client_id]->online = true;
     registered_clients[client_id]->descriptor = &fds.back();
     registered_clients[client_id]->index = fds.size() - 1;
+
+    // Refresh poll fd list
+    for (auto client : registered_clients)
+    {
+        client.second->descriptor = &fds[client.second->index];
+    }
 }
 
 int Server::getClientCommand(Client *cli) {   
-    memset(buf, 0, BUFLEN);
-
+    // printf("PROCESSING CLIENT %d - %s:%d:%p\n",cli->index, cli->id, cli->descriptor->revents, cli->descriptor);
+        
     if(cli->descriptor->revents == 0)
         return 0;
     
     message confirmation;
     cli_command new_comm;
-
+    memset(&new_comm, 0, sizeof(new_comm));
+    memset(&confirmation, 0, sizeof(confirmation));
     // If error is encountered, close the connection to the client
     if(cli->descriptor->revents == 25)
-        confirmation.type = EXIT;
+        new_comm.type = EXIT;
     else {
         err = recv(cli->descriptor->fd, &new_comm, sizeof(new_comm), 0);
     }
-    
+
     // printf("GOT COMMAND TYPE %d FOR %s\n", new_comm.type, new_comm.topic);
-    if(err <= 0 || new_comm.type == EXIT) {
+    if(err == 0 || new_comm.type == EXIT) {
         printf("Client %s disconnected.\n", cli->id);
         close(cli->descriptor->fd);
         cli->online = false;
@@ -236,21 +265,24 @@ int Server::getClientCommand(Client *cli) {
         err = send(cli->descriptor->fd, &confirmation, sizeof(confirmation), 0);
         DIE(err < 0, "CONFIRM ERROR");
     } else if (new_comm.type == SUB_NOSF) {
-        topicLibrary[std::string(new_comm.topic)].subscribers.push_back(cli);
         cli->isSF[std::string(new_comm.topic)] = 0;
+        topicLibrary[std::string(new_comm.topic)].subscribers.remove(cli);
+        topicLibrary[std::string(new_comm.topic)].subscribers.push_back(cli);
+
         confirmation.type = CONFIRM;
         strcpy(confirmation.topic, "Subscribed to topic.\n");
         err = send(cli->descriptor->fd, &confirmation, sizeof(confirmation), 0);
         DIE(err < 0, "CONFIRM ERROR");
     } else if (new_comm.type == SUB_SF) {
+        cli->isSF[std::string(new_comm.topic)] = 1;
+        topicLibrary[std::string(new_comm.topic)].subscribers.remove(cli);
         topicLibrary[std::string(new_comm.topic)].subscribers.push_back(cli);
-        cli->isSF[new_comm.topic] = 1;
+        
         confirmation.type = CONFIRM;
         strcpy(confirmation.topic, "Subscribed to topic.\n");
         err = send(cli->descriptor->fd, &confirmation, sizeof(confirmation), 0);
         DIE(err < 0, "CONFIRM ERROR");
     }
-
     return 1;
 }
 

@@ -4,7 +4,7 @@ EXE_SERV= server
 EXE_SUBS= subscriber
 
 # Server port
-PORT = 12345
+PORT = 12340
 
 # Server IP address
 IP_SERVER = 127.0.0.1

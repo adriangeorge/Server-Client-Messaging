@@ -11,13 +11,14 @@ cli_command sendCommand()
     char *pch;
     cli_command new_command;
     memset(buffer, 0, BUFLEN);
-    fgets(buffer, BUFLEN - 1, stdin);
-
+    memset(&new_command, 0, sizeof(new_command));
+    fgets(buffer, BUFLEN, stdin);
     if (strncmp(buffer, "exit", 4) == 0)
     {
         new_command.type = EXIT;
+        return new_command;
     }
-    else if (strncmp(buffer, "subscribe", 4) == 0)
+    else if (strncmp(buffer, "subscribe", 9) == 0)
     {
         pch = strtok(buffer, " ");
         // Get topic
@@ -36,6 +37,7 @@ cli_command sendCommand()
         if (pch != NULL)
         {
             new_command.type = pch[0] - '0';
+            return new_command;
         }
         else
         {
@@ -43,15 +45,18 @@ cli_command sendCommand()
             return new_command;
         }
     }
-    else if (strncmp(buffer, "unsubscribe", 4) == 0)
+    else if (strncmp(buffer, "unsubscribe", 11) == 0)
     {
-        new_command.type = UNSUB;
+
         pch = strtok(buffer, " ");
         // Get topic
         pch = strtok(NULL, " ");
+
         if (pch != NULL)
         {
-            strcpy(new_command.topic, pch);
+            new_command.type = UNSUB;
+            strncpy(new_command.topic, pch, strlen(pch) - 1);
+            return new_command;
         }
         else
         {
@@ -59,6 +64,8 @@ cli_command sendCommand()
             return new_command;
         }
     }
+    // If execution reached this point, the command is invalid
+    new_command.type = INVALID;
     return new_command;
 }
 
@@ -69,7 +76,7 @@ int main(int argc, char *argv[])
     // Disable buffered output
     setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
-    int sockfd, n;
+    int sockfd;
     struct sockaddr_in serv_addr;
 
     // Open socket for communication over TCP with server
@@ -99,15 +106,22 @@ int main(int argc, char *argv[])
     fds[TCP_SK].events = POLLIN;
     fds[TCP_SK].fd = sockfd;
 
+    cli_command new_command;
+    message recv_msg;
+
     // Sending a connection request to the server
     err = connect(fds[TCP_SK].fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
     DIE(err < 0, "connect");
     // Sending this client's id to the server to be registered
     err = send(fds[TCP_SK].fd, argv[1], strlen(argv[1]), 0);
     DIE(err < 0, "send");
-
-    cli_command new_command;
-    message recv_msg;
+    // Get valid ID confirmation
+    err = recv(sockfd, &recv_msg, sizeof(recv_msg), 0);
+    if (err == 1) {
+        close(sockfd);
+        return 0;
+    }
+    fds[TCP_SK].revents = 0;
     int num_resp;
     do
     {
@@ -118,18 +132,27 @@ int main(int argc, char *argv[])
         if (fds[KEY_IN].revents == POLLIN)
         {
             new_command = sendCommand();
+            if(new_command.type == INVALID) {
+                fds[KEY_IN].revents = 0;
+                continue;
+            }
+
             if (new_command.type == EXIT)
                 break;
-            else if (new_command.type == SUB_NOSF || new_command.type == SUB_SF)
+            else if (new_command.type == SUB_NOSF ||
+                     new_command.type == SUB_SF ||
+                     new_command.type == UNSUB)
             {
                 // Send command to server
                 err = send(sockfd, &new_command, sizeof(new_command), 0);
                 DIE(err < 0, "send");
+
+                new_command.type = -1;
                 // Get confirmation
                 err = recv(sockfd, &recv_msg, sizeof(recv_msg), 0);
+                printf("%s", recv_msg.topic);
                 DIE(err < 0, "recv err");
-                if (err > 0)
-                    printf("%s", recv_msg.topic);
+
             }
         }
 
@@ -174,6 +197,5 @@ int main(int argc, char *argv[])
     } while (true);
 
     close(sockfd);
-
     return 0;
 }
