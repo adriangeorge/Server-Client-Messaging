@@ -218,6 +218,21 @@ void Server::createClient() {
     registered_clients[client_id]->descriptor = &fds.back();
     registered_clients[client_id]->index = fds.size() - 1;
 
+    for (auto stored : registered_clients[client_id]->backlog)
+    {
+        send(new_client_sock, &stored->msg, sizeof(stored->msg), 0);
+
+        // Decrement the number of remaining messages to be sent
+        // If no more clients need to receive this message, delete it from
+        // The server's memory
+        stored->reach--;
+        if(stored->reach == 0)
+            free(stored);
+    }
+
+    // // Clear this client's backlog since all messages contained have been sent.
+    registered_clients[client_id]->backlog.clear();
+    
     // Refresh poll fd list
     for (auto client : registered_clients)
     {

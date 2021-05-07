@@ -99,15 +99,21 @@ int Server::broadcastMsg(message msg)
     std::string topicStr(msg.topic);
     msg_entry = std::make_pair(msg,0);
     // std::cout << "TOPIC " << topicStr << " HAS " << topicLibrary[topicStr].subscribers.size() << " SUBS\n";
-    
+    storedMsg* st_msg = (storedMsg*) malloc(sizeof(storedMsg));
+    strncpy(st_msg->msg.topic, msg.topic, TOPIC_SIZE);
+    strncpy(st_msg->msg.content, msg.content, CONTENT_SIZE);
+    st_msg->msg.type = msg.type;
+    st_msg->msg.udp_ip = msg.udp_ip;
+    st_msg->msg.udp_port = msg.udp_port;
+    st_msg->reach = 0;
     // Go through each client in this topic's subscriber list
     // If any of them are online send the message directly
     // Else check if they have enabled SF so the message can be added
     // To their backlog
     for (auto client : topicLibrary[topicStr].subscribers)
     {
-        // int store;
-        // store = (*client).isSF[topicStr];
+        int store;
+        store = (*client).isSF[topicStr];
         // If the client is online, simply send the message
         if (client->online)
         {
@@ -117,15 +123,19 @@ int Server::broadcastMsg(message msg)
                        0);
             DIE(err < 0, "BROADCAST ERROR");
         } 
-        // else if (store) {
-        //     // If the client is offline but still has SF enabled
-        //     // Add message to client's backlog and increase remaining by one
-        //     if(msg_entry.second == 0)
-        //         topicLibrary[topicStr].messages.push_back(msg_entry);
+        else if (store) {
+            // Create a message , int pair used for a message that still 
+            // has to be sent to clients that were offline at the time of
+            // sending the uint8_t stores the number of clients that still
+            // need to receive the msg when it reaches 0 the pointer is freed
+            
 
-        //     topicLibrary[topicStr].messages.back().second++;
-        //     client->backlog.push_back(&topicLibrary[topicStr].messages.back());
-        // }
+            st_msg->reach++;
+            // If the client is offline but still has SF enabled
+            // Add message to client's backlog and increase remaining by one
+
+            client->backlog.push_back(st_msg);
+        }
     }
     return 0;
 }

@@ -17,7 +17,7 @@ public:
 
     // Each element points to a message in a certain
     // topic's backlog message list
-    std::list<std::pair<message, int>*> backlog;
+    std::list<storedMsg*> backlog;
     Client();
     ~Client();
 };

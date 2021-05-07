@@ -60,6 +60,13 @@ struct message
     
 };
 
+
+struct storedMsg {
+    message msg;
+    uint8_t reach;
+};
+
+
 // Types of commands that can be received from the TCP clients
 enum cli_command_type
 {
