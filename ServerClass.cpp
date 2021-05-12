@@ -61,13 +61,6 @@ Server::~Server()
 
 message Server::handlePolls(int num_resp)
 {
-    // printf("K:%d U:%d T:%d\n", fds[LISTEN_KEY].revents,
-    //            fds[LISTEN_UDP].revents,
-    //            fds[LISTEN_TCP].revents);
-    // for (int i = 3; i < sockCount(); i++)
-    // {
-    //     printf("SOCK %d:%d:%p\n", i, fds[i].revents, &fds[i]);
-    // }
     message package;
     memset(&package, 0, sizeof(package));
     // printf("CHECKING FOR KEYBOARD INPUT\n");
@@ -175,23 +168,33 @@ void Server::createClient() {
     DIE(err < 0, "RECV CLIENT ID ERROR");
     strcpy(client_id, buf);
     // Notify that a new client has joined
+    message confirmation;
     if(registered_clients.count(client_id) == 0) {
         printf("New client %s connected from %s:%u.\n",
                         client_id,
                         inet_ntoa(new_client.sin_addr),
                         new_client.sin_port);
-        send(new_client_sock, "OK", 2, 0);
+        
+        confirmation.type = ACCEPT;
+        err = send(new_client_sock, &confirmation, sizeof(confirmation), 0);
+        DIE(err < 0, "CONFIRM ERROR");
     }
     else if (!registered_clients[client_id]->online) {
         printf("New client %s connected from %s:%u.\n",
                             client_id,
                             inet_ntoa(new_client.sin_addr),
                             new_client.sin_port);
-        send(new_client_sock, "OK", 2, 0);
+
+        confirmation.type = ACCEPT;
+        err = send(new_client_sock, &confirmation, sizeof(confirmation), 0);
+        DIE(err < 0, "CONFIRM ERROR");
     }
     else {
         printf("Client %s already connected.\n", client_id);
-        send(new_client_sock, "N", 1, 0);
+
+        confirmation.type = DENIED;
+        err = send(new_client_sock, &confirmation, sizeof(confirmation), 0);
+        DIE(err < 0, "CONFIRM ERROR");
         return;
     }
     
@@ -220,8 +223,8 @@ void Server::createClient() {
 
     for (auto stored : registered_clients[client_id]->backlog)
     {
-        send(new_client_sock, &stored->msg, sizeof(stored->msg), 0);
-
+        err = send(new_client_sock, &stored->msg, sizeof(stored->msg), 0);
+        DIE(err < 0, "SENDING STORED MESSAGES FAILED");
         // Decrement the number of remaining messages to be sent
         // If no more clients need to receive this message, delete it from
         // The server's memory
@@ -230,7 +233,7 @@ void Server::createClient() {
             free(stored);
     }
 
-    // // Clear this client's backlog since all messages contained have been sent.
+    // Clear this client's backlog since all messages contained have been sent.
     registered_clients[client_id]->backlog.clear();
     
     // Refresh poll fd list
@@ -240,9 +243,7 @@ void Server::createClient() {
     }
 }
 
-int Server::getClientCommand(Client *cli) {   
-    // printf("PROCESSING CLIENT %d - %s:%d:%p\n",cli->index, cli->id, cli->descriptor->revents, cli->descriptor);
-        
+int Server::getClientCommand(Client *cli) {        
     if(cli->descriptor->revents == 0)
         return 0;
     

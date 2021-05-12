@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
     DIE(err < 0, "send");
     // Get valid ID confirmation
     err = recv(sockfd, &recv_msg, sizeof(recv_msg), 0);
-    if (err == 1) {
+    if (recv_msg.type == DENIED) {
         close(sockfd);
         return 0;
     }
@@ -157,14 +157,15 @@ int main(int argc, char *argv[])
         }
 
         if (fds[TCP_SK].revents == POLLIN)
-        {
+        {   
             err = recv(sockfd, &recv_msg, sizeof(recv_msg), 0);
             DIE(err < 0, "recv err");
             if (err == 0)
                 break;
-
+            
             if (recv_msg.type <= 3 && recv_msg.type >= 0)
             {
+
                 std::string typeStr;
                 switch (recv_msg.type)
                 {
@@ -197,5 +198,6 @@ int main(int argc, char *argv[])
     } while (true);
 
     close(sockfd);
+    close(0);
     return 0;
 }

@@ -37,14 +37,15 @@
 #define LISTEN_TCP 2
 
 // Types of inputs that can be received from the UDP clients
-enum message_type
-{
+enum message_type {
     INT,
     SHORT_REAL,
     FLOAT,
     STRING,
     INVALID,
-    CONFIRM
+    CONFIRM,
+    ACCEPT,
+    DENIED
 };
 
 // Message struct, received from UDP clients and sent to TCP clients after

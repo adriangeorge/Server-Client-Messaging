@@ -133,10 +133,12 @@ int Server::broadcastMsg(message msg)
             st_msg->reach++;
             // If the client is offline but still has SF enabled
             // Add message to client's backlog and increase remaining by one
-
             client->backlog.push_back(st_msg);
         }
     }
+
+    if(st_msg->reach == 0)
+        free(st_msg);
     return 0;
 }
 // Usage: ./server <port>
@@ -184,15 +186,7 @@ int main(int argc, char **argv)
 
         if (num_resp == 0)
             break;
-        // printf("K:%d U:%d T:%d\n", server.getSockList()[LISTEN_KEY].revents,
-        //        server.getSockList()[LISTEN_UDP].revents,
-        //        server.getSockList()[LISTEN_TCP].revents);
 
-        // printf("Client count: %d\n", (int)server.getSockVect().size() - 3);
-        // for (int i = 3; i < (int)server.getSockVect().size(); i++)
-        // {
-        //     printf("SOCK %d:%d\n", i, server.getSockVect()[i].revents);
-        // }
         // Get a new package from the UDP clients
         package = server.handlePolls(num_resp);
 
