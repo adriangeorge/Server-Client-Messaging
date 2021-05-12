@@ -1,12 +1,15 @@
 #ifndef __SERVER__
 #define __SERVER__
 
-#include "lib.hpp"
 #include "ClientClass.hpp"
 #include "Topic.hpp"
+#include "lib.hpp"
 
+// Maximum ammount of clients waiting in the queue
 #define MAXQ 10
-class Server {
+
+class Server
+{
 private:
     // Collection of file descriptors
     // 0 for STDIN
@@ -17,10 +20,10 @@ private:
 
     // Client map for fast access to all registered clients
     // Key: filedescriptor, Value: Client object
-    std::unordered_map<std::string, Client*> registered_clients;
+    std::unordered_map<std::string, Client *> registered_clients;
 
-    // Client map for fast access to all registered clients
-    // Key: filedescriptor, Value: Client object
+    // Client map for fast access to all known topics
+    // Key: filedescriptor, Value: Topic object
     std::unordered_map<std::string, Topic> topicLibrary;
     // Timeout
     // By default will be set to 3 minutes
@@ -51,7 +54,6 @@ private:
     bool status;
 
 public:
-
     // Constructor
     // Bind socket and socket address
     Server(uint16_t port);
@@ -59,15 +61,16 @@ public:
     ~Server();
 
     // Returns a pointer to the server buffer
-    char* getBuf();
+    char *getBuf();
 
     // Returns a pointer to the first element
     // of the fd list
-    pollfd* getSockList();
+    pollfd *getSockList();
 
     // Returns a pointer to the first element
     // of the fd list
     std::vector<pollfd> getSockVect();
+    
     // Return the number of active sockets
     int sockCount();
 
@@ -84,12 +87,10 @@ public:
     // Check whether loop is running
     bool isRunning();
 
+    // Process input coming from TCP clients
     int getClientCommand(Client *cli);
 
-    void addMessageToTopic(message msg);
-
-    std::unordered_map<std::string, Topic> getLibrary();
-
+    // Sends msg to all clients subscribed
     int broadcastMsg(message msg);
 };
 

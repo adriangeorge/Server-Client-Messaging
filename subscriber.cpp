@@ -13,11 +13,14 @@ cli_command sendCommand()
     memset(buffer, 0, BUFLEN);
     memset(&new_command, 0, sizeof(new_command));
     fgets(buffer, BUFLEN, stdin);
+    // If the user sent exit, the type of command will make the program to
+    // break out of the while loop
     if (strncmp(buffer, "exit", 4) == 0)
     {
         new_command.type = EXIT;
         return new_command;
     }
+    // Prepare subscribe message
     else if (strncmp(buffer, "subscribe", 9) == 0)
     {
         pch = strtok(buffer, " ");
@@ -45,11 +48,12 @@ cli_command sendCommand()
             return new_command;
         }
     }
+    // Prepare unsubscribe message
     else if (strncmp(buffer, "unsubscribe", 11) == 0)
     {
 
         pch = strtok(buffer, " ");
-        // Get topic
+        // Get topic to unsubscribe from
         pch = strtok(NULL, " ");
 
         if (pch != NULL)
@@ -110,14 +114,17 @@ int main(int argc, char *argv[])
     message recv_msg;
 
     // Sending a connection request to the server
-    err = connect(fds[TCP_SK].fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    err = connect(fds[TCP_SK].fd, (struct sockaddr *)&serv_addr,
+                                    sizeof(serv_addr));
     DIE(err < 0, "connect");
     // Sending this client's id to the server to be registered
     err = send(fds[TCP_SK].fd, argv[1], strlen(argv[1]), 0);
     DIE(err < 0, "send");
     // Get valid ID confirmation
     err = recv(sockfd, &recv_msg, sizeof(recv_msg), 0);
-    if (recv_msg.type == DENIED) {
+    DIE(err < 0, "recv");
+    if (recv_msg.type == DENIED)
+    {
         close(sockfd);
         return 0;
     }
@@ -132,7 +139,8 @@ int main(int argc, char *argv[])
         if (fds[KEY_IN].revents == POLLIN)
         {
             new_command = sendCommand();
-            if(new_command.type == INVALID) {
+            if (new_command.type == INVALID)
+            {
                 fds[KEY_IN].revents = 0;
                 continue;
             }
@@ -152,20 +160,18 @@ int main(int argc, char *argv[])
                 err = recv(sockfd, &recv_msg, sizeof(recv_msg), 0);
                 printf("%s", recv_msg.topic);
                 DIE(err < 0, "recv err");
-
             }
         }
 
+        // Process TCP messages
         if (fds[TCP_SK].revents == POLLIN)
-        {   
+        {
             err = recv(sockfd, &recv_msg, sizeof(recv_msg), 0);
             DIE(err < 0, "recv err");
             if (err == 0)
                 break;
-            
-            if (recv_msg.type <= 3 && recv_msg.type >= 0)
-            {
 
+            if (recv_msg.type <= 3 && recv_msg.type >= 0) {
                 std::string typeStr;
                 switch (recv_msg.type)
                 {

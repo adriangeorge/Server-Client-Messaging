@@ -56,7 +56,7 @@ std::string processFL(message *pack)
     uint8_t b4 = pack->content[4];
     whole = (b1 << 24) |
             (b2 << 16) |
-            (b3 << 8)  | b4;
+            (b3 << 8) | b4;
 
     uint8_t power = pack->content[5];
 
@@ -92,14 +92,13 @@ std::string processSTR(message *pack)
 
 int Server::broadcastMsg(message msg)
 {
-    if(msg.type == INVALID)
+    if (msg.type == INVALID)
         return 0;
 
     std::pair<message, int> msg_entry;
     std::string topicStr(msg.topic);
-    msg_entry = std::make_pair(msg,0);
-    // std::cout << "TOPIC " << topicStr << " HAS " << topicLibrary[topicStr].subscribers.size() << " SUBS\n";
-    storedMsg* st_msg = (storedMsg*) malloc(sizeof(storedMsg));
+    msg_entry = std::make_pair(msg, 0);
+    storedMsg *st_msg = (storedMsg *)malloc(sizeof(storedMsg));
     strncpy(st_msg->msg.topic, msg.topic, TOPIC_SIZE);
     strncpy(st_msg->msg.content, msg.content, CONTENT_SIZE);
     st_msg->msg.type = msg.type;
@@ -122,13 +121,13 @@ int Server::broadcastMsg(message msg)
                        sizeof(msg),
                        0);
             DIE(err < 0, "BROADCAST ERROR");
-        } 
-        else if (store) {
-            // Create a message , int pair used for a message that still 
+        }
+        else if (store)
+        {
+            // Create a message , int pair used for a message that still
             // has to be sent to clients that were offline at the time of
             // sending the uint8_t stores the number of clients that still
             // need to receive the msg when it reaches 0 the pointer is freed
-            
 
             st_msg->reach++;
             // If the client is offline but still has SF enabled
@@ -137,7 +136,7 @@ int Server::broadcastMsg(message msg)
         }
     }
 
-    if(st_msg->reach == 0)
+    if (st_msg->reach == 0)
         free(st_msg);
     return 0;
 }
@@ -178,10 +177,10 @@ int main(int argc, char **argv)
     {
         feedMessage = "";
         package.type = INVALID;
-        // std::cout << "\n\nSERVER READY\n"; 
         num_resp = poll(server.getSockList(),
                         server.sockCount(),
                         server.getTimeout());
+
         DIE(err < 0, "Polling error");
 
         if (num_resp == 0)
@@ -224,7 +223,7 @@ int main(int argc, char **argv)
         // Offline
         // std::cout << "BROADCASTING" << feedMessage << std::endl;
         // feedMessage = "";
-        if(feedMessage != "")
+        if (feedMessage != "")
             server.broadcastMsg(package);
 
     } while (true);
